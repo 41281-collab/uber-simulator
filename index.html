@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dark City - Uber Simulator</title>
+<style>
+body { background: black; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: monospace; }
+canvas { border: 3px solid white; background: #111; image-rendering: pixelated; }
+#overlay { position:absolute; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center; flex-direction:column; background:rgba(0,0,0,0.9); color:white; font-size:24px; text-align:center;}
+button { margin:10px; padding:10px 20px; font-size:20px; cursor:pointer; border:none; border-radius:6px;}
+#scoreboard { position:absolute; top:20px; left:50%; transform:translateX(-50%); color:white; font-size:24px; text-shadow:2px 2px black; display:none;}
+</style>
+</head>
+<body>
+<canvas id="game" width="400" height="500"></canvas>
+<div id="overlay"></div>
+<div id="scoreboard">Score: 0</div>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const overlay=document.getElementById("overlay");
+const scoreboard=document.getElementById("scoreboard");
+
+let lang="en";
+const texts={
+en:{title:"🚖 Dark City - Uber Simulator",play:"▶ Start Game",credits:"ℹ Credits",language:"🌍 Language: English",gameover:"GAME OVER",restart:"🔄 Restart",back:"⬅ Back",creditsText:"Credits:\nFelipe Godoy\nDavi Galiano\nGiovani Bertucci\nMiguel Victali\nHeitor Pinto\nCamilly Vitória\n2025",scoreLabel:"Score"},
+pt:{title:"🚖 Cidade Sombria - Uber Simulator",play:"▶ Iniciar Jogo",credits:"ℹ Créditos",language:"🌍 Idioma: Português",gameover:"FIM DE JOGO",restart:"🔄 Reiniciar",back:"⬅ Voltar",creditsText:"Créditos:\nFelipe Godoy\nDavi Galiano\nGiovani Bertucci\nMiguel Victali\nHeitor Pinto\nCamilly Vitória\n2025",scoreLabel:"Pontuação"}
+};
+
+let player, obstacles, pedestrians, poles, score, gameOver, keys={};
+document.addEventListener("keydown", e=>keys[e.key]=true);
+document.addEventListener("keyup", e=>keys[e.key]=false);
+
+function showMenu(){
+overlay.innerHTML=`<h1>${texts[lang].title}</h1>
+<button onclick="startGame()">${texts[lang].play}</button>
+<button onclick="showCredits()">${texts[lang].credits}</button>
+<button onclick="toggleLang()">${texts[lang].language}</button>`;
+overlay.style.display="flex"; scoreboard.style.display="none";
+}
+
+function showCredits(){
+overlay.innerHTML=`<h2>${texts[lang].credits}</h2>
+<pre>${texts[lang].creditsText}</pre>
+<button onclick="showMenu()">${texts[lang].back}</button>`;
+}
+
+function toggleLang(){ lang=(lang==="en")?"pt":"en"; showMenu(); }
+
+function startGame(){
+overlay.style.display="none";
+scoreboard.style.display="block";
+resetGame();
+requestAnimationFrame(loop);
+}
+
+function resetGame(){
+player={x:canvas.width/2-20,y:canvas.height-100,w:40,h:60,speed:6};
+obstacles=[];
+pedestrians=[];
+poles=[];
+score=0;
+gameOver=false;
+scoreboard.innerText=texts[lang].scoreLabel+": 0";
+
+// Pedestres
+const clothesColors=["red","blue","green","purple","orange"];
+for(let i=0;i<8;i++){
+  pedestrians.push({x:Math.random()<0.5?20:360, y:Math.random()*canvas.height, w:10,h:20, speed:1+Math.random(), color: clothesColors[Math.floor(Math.random()*clothesColors.length)], step:0});
+}
+
+// Postes realistas
+for(let i=0;i<5;i++){
+  poles.push({x:50,y:i*120+50});
+  poles.push({x:350,y:i*120+50});
+}
+}
+
+function drawPixelCar(x,y,color="blue"){
+ctx.fillStyle=color; ctx.fillRect(x,y,40,60);
+ctx.fillStyle="lightblue"; ctx.fillRect(x+8,y+8,24,20);
+ctx.fillStyle="yellow"; ctx.fillRect(x+5,y,8,5); ctx.fillRect(x+27,y,8,5);
+ctx.fillStyle="red"; ctx.fillRect(x+5,y+55,8,5); ctx.fillRect(x+27,y+55,8,5);
+ctx.fillStyle="black"; ctx.fillRect(x-4,y+10,4,15); ctx.fillRect(x+40,y+10,4,15);
+ctx.fillRect(x-4,y+35,4,15); ctx.fillRect(x+40,y+35,4,15);
+}
+
+function drawPlayer(){ drawPixelCar(player.x,player.y,"blue"); }
+
+function drawPedestrian(p){
+  ctx.fillStyle=p.color; ctx.fillRect(p.x,p.y+4,p.w,12);
+  ctx.fillStyle="lightpink"; ctx.fillRect(p.x+2,p.y,p.w-4,4);
+  if(p.step%20<10){ ctx.fillRect(p.x-2,p.y+4,2,6); ctx.fillRect(p.x+p.w,p.y+4,2,6); ctx.fillRect(p.x+1,p.y+14,3,6); ctx.fillRect(p.x+6,p.y+14,3,6);}
+  else{ ctx.fillRect(p.x-2,p.y+6,2,6); ctx.fillRect(p.x+p.w,p.y+6,2,6); ctx.fillRect(p.x+3,p.y+14,3,6); ctx.fillRect(p.x+4,p.y+14,3,6);}
+  p.step++;
+}
+
+function drawObstacles(){ obstacles.forEach(o=>{ drawPixelCar(o.x,o.y,"red"); o.y+=o.speed; }); obstacles=obstacles.filter(o=>o.y<canvas.height); }
+
+function spawnObstacle(){ if(Math.random()<0.015){ let lane=Math.floor(Math.random()*3); obstacles.push({x:60+lane*100,y:-60,w:40,h:60,speed:5+score/500}); } }
+
+function detectCollision(){ for(let o of obstacles){ if(player.x<o.x+o.w && player.x+player.w>o.x && player.y<o.y+o.h && player.y+player.h>o.y) return true; } return false; }
+
+function drawRoad(){
+ctx.fillStyle="gray"; ctx.fillRect(50,0,300,canvas.height);
+ctx.fillStyle="yellow"; for(let i=0;i<canvas.height;i+=40) ctx.fillRect(canvas.width/2-5,i,10,20);
+}
+
+// Pedestres
+function updatePedestrians(){ pedestrians.forEach(p=>{ p.y+=p.speed; if(p.y>canvas.height) p.y=-p.h; drawPedestrian(p); }); }
+
+// Postes realistas com luz projetada
+function drawPoles(){
+poles.forEach(p=>{
+  // luz projetada no chão
+  const gradient=ctx.createRadialGradient(p.x+2,p.y+45,5,p.x+2,p.y+45,60);
+  gradient.addColorStop(0,"rgba(255,255,200,0.5)");
+  gradient.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=gradient;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  
+  // haste
+  ctx.fillStyle="darkgray"; ctx.fillRect(p.x,p.y,4,50);
+  // luminárias horizontais
+  ctx.fillStyle="lightyellow"; ctx.fillRect(p.x-10,p.y-2,10,4);
+  ctx.fillRect(p.x+4,p.y-2,10,4);
+  
+  p.y+=0.5; if(p.y>canvas.height) p.y=-50;
+});
+}
+
+function loop(){
+if(gameOver) return;
+ctx.clearRect(0,0,canvas.width,canvas.height);
+drawRoad();
+drawPoles();
+updatePedestrians();
+if(keys["ArrowLeft"] && player.x>60) player.x-=player.speed;
+if(keys["ArrowRight"] && player.x<300) player.x+=player.speed;
+drawPlayer();
+spawnObstacle();
+drawObstacles();
+if(detectCollision()){ endGame(); return; }
+score++;
+scoreboard.innerText=texts[lang].scoreLabel+": "+score;
+requestAnimationFrame(loop);
+}
+
+function endGame(){
+gameOver=true;
+overlay.innerHTML=`<h1 style="color:red">${texts[lang].gameover}</h1>
+<p>${texts[lang].scoreLabel}: ${score}</p>
+<button onclick="startGame()">${texts[lang].restart}</button>
+<button onclick="showMenu()">${texts[lang].back}</button>`;
+overlay.style.display="flex"; scoreboard.style.display="none";
+}
+
+document.addEventListener("keydown", e=>{
+if(e.key==="Escape"){
+  if(!gameOver){
+    if(overlay.style.display==="none"){
+      overlay.innerHTML=`<h1>PAUSED</h1><button onclick="resumeGame()">Resume</button>`;
+      overlay.style.display="flex";
+    } else { overlay.style.display="none"; loop(); }
+  }
+}
+});
+
+function resumeGame(){ overlay.style.display="none"; loop(); }
+
+showMenu();
+</script>
+</body>
+</html>
